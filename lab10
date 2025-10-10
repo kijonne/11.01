@@ -1,0 +1,679 @@
+Я помогу вам выполнить лабораторную работу по разработке приложения для фильтрации, поиска и сортировки данных с использованием EF Core. Вот пошаговое решение всех заданий:
+
+3.1 Создание библиотеки для работы с БД
+
+3.1.1-3.1.2 Создание проекта и моделей данных
+
+CinemaDbLibrary.csproj:
+
+```xml
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="8.0.0" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="8.0.0" />
+  </ItemGroup>
+</Project>
+```
+
+Models/Visitor.cs:
+
+```csharp
+namespace CinemaDbLibrary.Models
+{
+    public class Visitor
+    {
+        public int VisitorId { get; set; }
+        public string Name { get; set; } = string.Empty;
+        public string Phone { get; set; } = string.Empty;
+        public string Email { get; set; } = string.Empty;
+        
+        public ICollection<Ticket> Tickets { get; set; } = new List<Ticket>();
+    }
+}
+```
+
+Models/Genre.cs:
+
+```csharp
+namespace CinemaDbLibrary.Models
+{
+    public class Genre
+    {
+        public int GenreId { get; set; }
+        public string Name { get; set; } = string.Empty;
+        
+        public ICollection<Movie> Movies { get; set; } = new List<Movie>();
+    }
+}
+```
+
+Models/Movie.cs:
+
+```csharp
+namespace CinemaDbLibrary.Models
+{
+    public class Movie
+    {
+        public int MovieId { get; set; }
+        public string Title { get; set; } = string.Empty;
+        public int Duration { get; set; }
+        public int ReleaseYear { get; set; }
+        public DateTime StartDate { get; set; }
+        public DateTime EndDate { get; set; }
+        
+        public ICollection<Genre> Genres { get; set; } = new List<Genre>();
+        public ICollection<Ticket> Tickets { get; set; } = new List<Ticket>();
+    }
+}
+```
+
+Models/Ticket.cs:
+
+```csharp
+namespace CinemaDbLibrary.Models
+{
+    public class Ticket
+    {
+        public int TicketId { get; set; }
+        public DateTime PurchaseDate { get; set; }
+        public decimal Price { get; set; }
+        public int SeatNumber { get; set; }
+        
+        public int VisitorId { get; set; }
+        public Visitor Visitor { get; set; } = null!;
+        
+        public int MovieId { get; set; }
+        public Movie Movie { get; set; } = null!;
+    }
+}
+```
+
+Context/CinemaDbContext.cs:
+
+```csharp
+using Microsoft.EntityFrameworkCore;
+using CinemaDbLibrary.Models;
+
+namespace CinemaDbLibrary.Context
+{
+    public class CinemaDbContext : DbContext
+    {
+        public CinemaDbContext(DbContextOptions<CinemaDbContext> options) : base(options) { }
+        
+        public DbSet<Visitor> Visitors { get; set; }
+        public DbSet<Movie> Movies { get; set; }
+        public DbSet<Genre> Genres { get; set; }
+        public DbSet<Ticket> Tickets { get; set; }
+        
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
+        {
+            // Many-to-Many relationship between Movie and Genre
+            modelBuilder.Entity<Movie>()
+                .HasMany(m => m.Genres)
+                .WithMany(g => g.Movies)
+                .UsingEntity(j => j.ToTable("MovieGenres"));
+                
+            base.OnModelCreating(modelBuilder);
+        }
+    }
+}
+```
+
+3.1.3 Создание сервисов
+
+Services/BaseService.cs:
+
+```csharp
+using CinemaDbLibrary.Context;
+
+namespace CinemaDbLibrary.Services
+{
+    public abstract class BaseService
+    {
+        protected readonly CinemaDbContext _context;
+        
+        protected BaseService(CinemaDbContext context)
+        {
+            _context = context;
+        }
+    }
+}
+```
+
+Services/VisitorService.cs:
+
+```csharp
+using Microsoft.EntityFrameworkCore;
+using CinemaDbLibrary.Context;
+using CinemaDbLibrary.Models;
+
+namespace CinemaDbLibrary.Services
+{
+    public class VisitorService : BaseService
+    {
+        public VisitorService(CinemaDbContext context) : base(context) { }
+        
+        public async Task<Visitor?> GetByIdAsync(int id)
+        {
+            return await _context.Visitors
+                .Include(v => v.Tickets)
+                .ThenInclude(t => t.Movie)
+                .FirstOrDefaultAsync(v => v.VisitorId == id);
+        }
+        
+        public async Task<List<Visitor>> GetAllAsync()
+        {
+            return await _context.Visitors
+                .Include(v => v.Tickets)
+                .ThenInclude(t => t.Movie)
+                .ToListAsync();
+        }
+    }
+}
+```
+
+Services/MovieService.cs:
+
+```csharp
+using Microsoft.EntityFrameworkCore;
+using CinemaDbLibrary.Context;
+using CinemaDbLibrary.Models;
+
+namespace CinemaDbLibrary.Services
+{
+    public class MovieService : BaseService
+    {
+        public MovieService(CinemaDbContext context) : base(context) { }
+        
+        public async Task<Movie?> GetByIdAsync(int id)
+        {
+            return await _context.Movies
+                .Include(m => m.Genres)
+                .Include(m => m.Tickets)
+                .ThenInclude(t => t.Visitor)
+                .FirstOrDefaultAsync(m => m.MovieId == id);
+        }
+        
+        public async Task<List<Movie>> GetAllAsync()
+        {
+            return await _context.Movies
+                .Include(m => m.Genres)
+                .Include(m => m.Tickets)
+                .ThenInclude(t => t.Visitor)
+                .ToListAsync();
+        }
+    }
+}
+```
+
+Services/GenreService.cs:
+
+```csharp
+using Microsoft.EntityFrameworkCore;
+using CinemaDbLibrary.Context;
+using CinemaDbLibrary.Models;
+
+namespace CinemaDbLibrary.Services
+{
+    public class GenreService : BaseService
+    {
+        public GenreService(CinemaDbContext context) : base(context) { }
+        
+        public async Task<Genre?> GetByIdAsync(int id)
+        {
+            return await _context.Genres
+                .Include(g => g.Movies)
+                .FirstOrDefaultAsync(g => g.GenreId == id);
+        }
+        
+        public async Task<List<Genre>> GetAllAsync()
+        {
+            return await _context.Genres
+                .Include(g => g.Movies)
+                .ToListAsync();
+        }
+    }
+}
+```
+
+Services/TicketService.cs:
+
+```csharp
+using Microsoft.EntityFrameworkCore;
+using CinemaDbLibrary.Context;
+using CinemaDbLibrary.Models;
+
+namespace CinemaDbLibrary.Services
+{
+    public class TicketService : BaseService
+    {
+        public TicketService(CinemaDbContext context) : base(context) { }
+        
+        public async Task<Ticket?> GetByIdAsync(int id)
+        {
+            return await _context.Tickets
+                .Include(t => t.Visitor)
+                .Include(t => t.Movie)
+                .ThenInclude(m => m.Genres)
+                .FirstOrDefaultAsync(t => t.TicketId == id);
+        }
+        
+        public async Task<List<Ticket>> GetAllAsync()
+        {
+            return await _context.Tickets
+                .Include(t => t.Visitor)
+                .Include(t => t.Movie)
+                .ThenInclude(m => m.Genres)
+                .ToListAsync();
+        }
+    }
+}
+```
+
+3.1.5 Тестирование в клиентском приложении
+
+Program.cs (консольное приложение):
+
+```csharp
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using CinemaDbLibrary.Context;
+using CinemaDbLibrary.Services;
+using CinemaDbLibrary.Models;
+
+// Настройка сервисов
+var services = new ServiceCollection();
+services.AddDbContext<CinemaDbContext>(options =>
+    options.UseSqlServer("Server=(localdb)\\mssqllocaldb;Database=CinemaDb;Trusted_Connection=true"));
+services.AddScoped<VisitorService>();
+services.AddScoped<MovieService>();
+services.AddScoped<GenreService>();
+services.AddScoped<TicketService>();
+
+var serviceProvider = services.BuildServiceProvider();
+
+// Тестирование сервисов
+await TestServices(serviceProvider);
+
+async Task TestServices(IServiceProvider sp)
+{
+    var visitorService = sp.GetRequiredService<VisitorService>();
+    var movieService = sp.GetRequiredService<MovieService>();
+    
+    Console.WriteLine("=== Testing Visitor Service ===");
+    var visitors = await visitorService.GetAllAsync();
+    foreach (var visitor in visitors)
+    {
+        Console.WriteLine($"Visitor: {visitor.Name}, Tickets: {visitor.Tickets.Count}");
+    }
+    
+    Console.WriteLine("\n=== Testing Movie Service ===");
+    var movies = await movieService.GetAllAsync();
+    foreach (var movie in movies)
+    {
+        Console.WriteLine($"Movie: {movie.Title}, Genres: {movie.Genres.Count}");
+    }
+}
+```
+
+3.2 Пагинация данных
+
+Models/Pagination.cs:
+
+```csharp
+namespace CinemaDbLibrary.Models
+{
+    public class Pagination
+    {
+        public int PageSize { get; set; } = 3;
+        public int PageNumber { get; set; } = 1;
+        
+        public int Skip => (PageNumber - 1) * PageSize;
+        public int Take => PageSize;
+    }
+}
+```
+
+Обновленный MovieService.cs:
+
+```csharp
+public async Task<List<Movie>> GetAllAsync(Pagination? pagination = null)
+{
+    var query = _context.Movies
+        .Include(m => m.Genres)
+        .Include(m => m.Tickets)
+        .ThenInclude(t => t.Visitor)
+        .AsQueryable();
+        
+    if (pagination != null)
+    {
+        query = query.Skip(pagination.Skip).Take(pagination.Take);
+    }
+    
+    return await query.ToListAsync();
+}
+```
+
+Обновленный VisitorService.cs:
+
+```csharp
+public async Task<List<Visitor>> GetAllAsync(Pagination? pagination = null)
+{
+    var query = _context.Visitors
+        .Include(v => v.Tickets)
+        .ThenInclude(t => t.Movie)
+        .AsQueryable();
+        
+    if (pagination != null)
+    {
+        query = query.Skip(pagination.Skip).Take(pagination.Take);
+    }
+    
+    return await query.ToListAsync();
+}
+```
+
+3.3 Сортировка данных
+
+Models/Sorting.cs:
+
+```csharp
+namespace CinemaDbLibrary.Models
+{
+    public class Sorting
+    {
+        public string ColumnName { get; set; } = string.Empty;
+        public bool IsAscending { get; set; } = true;
+    }
+}
+```
+
+Обновленный MovieService.cs:
+
+```csharp
+public async Task<List<Movie>> GetAllAsync(Pagination? pagination = null, Sorting? sorting = null)
+{
+    var query = _context.Movies
+        .Include(m => m.Genres)
+        .Include(m => m.Tickets)
+        .ThenInclude(t => t.Visitor)
+        .AsQueryable();
+        
+    // Применение сортировки
+    if (sorting != null && !string.IsNullOrEmpty(sorting.ColumnName))
+    {
+        query = ApplySorting(query, sorting);
+    }
+    
+    // Применение пагинации
+    if (pagination != null)
+    {
+        query = query.Skip(pagination.Skip).Take(pagination.Take);
+    }
+    
+    return await query.ToListAsync();
+}
+
+private IQueryable<Movie> ApplySorting(IQueryable<Movie> query, Sorting sorting)
+{
+    return sorting.ColumnName.ToLower() switch
+    {
+        "title" => sorting.IsAscending ? query.OrderBy(m => m.Title) : query.OrderByDescending(m => m.Title),
+        "releaseyear" => sorting.IsAscending ? query.OrderBy(m => m.ReleaseYear) : query.OrderByDescending(m => m.ReleaseYear),
+        "duration" => sorting.IsAscending ? query.OrderBy(m => m.Duration) : query.OrderByDescending(m => m.Duration),
+        _ => query.OrderBy(m => m.MovieId)
+    };
+}
+```
+
+Обновленный TicketService.cs:
+
+```csharp
+public async Task<List<Ticket>> GetAllAsync(Sorting? sorting = null)
+{
+    var query = _context.Tickets
+        .Include(t => t.Visitor)
+        .Include(t => t.Movie)
+        .ThenInclude(m => m.Genres)
+        .AsQueryable();
+        
+    if (sorting != null && !string.IsNullOrEmpty(sorting.ColumnName))
+    {
+        query = ApplySorting(query, sorting);
+    }
+    
+    return await query.ToListAsync();
+}
+
+private IQueryable<Ticket> ApplySorting(IQueryable<Ticket> query, Sorting sorting)
+{
+    return sorting.ColumnName.ToLower() switch
+    {
+        "purchasedate" => sorting.IsAscending ? query.OrderBy(t => t.PurchaseDate) : query.OrderByDescending(t => t.PurchaseDate),
+        "price" => sorting.IsAscending ? query.OrderBy(t => t.Price) : query.OrderByDescending(t => t.Price),
+        "seatnumber" => sorting.IsAscending ? query.OrderBy(t => t.SeatNumber) : query.OrderByDescending(t => t.SeatNumber),
+        _ => query.OrderBy(t => t.TicketId)
+    };
+}
+```
+
+3.4 Фильтрация данных
+
+Models/MovieFilter.cs:
+
+```csharp
+namespace CinemaDbLibrary.Models
+{
+    public class MovieFilter
+    {
+        public string? Title { get; set; }
+        public string? TitlePart { get; set; }
+        public int? MinReleaseYear { get; set; }
+        public DateTime? ShowDate { get; set; }
+    }
+}
+```
+
+Обновленный MovieService.cs:
+
+```csharp
+public async Task<List<Movie>> GetAllAsync(
+    Pagination? pagination = null, 
+    Sorting? sorting = null, 
+    MovieFilter? filter = null)
+{
+    var query = _context.Movies
+        .Include(m => m.Genres)
+        .Include(m => m.Tickets)
+        .ThenInclude(t => t.Visitor)
+        .AsQueryable();
+        
+    // Применение фильтрации
+    if (filter != null)
+    {
+        query = ApplyFilter(query, filter);
+    }
+    
+    // Применение сортировки
+    if (sorting != null && !string.IsNullOrEmpty(sorting.ColumnName))
+    {
+        query = ApplySorting(query, sorting);
+    }
+    
+    // Применение пагинации
+    if (pagination != null)
+    {
+        query = query.Skip(pagination.Skip).Take(pagination.Take);
+    }
+    
+    return await query.ToListAsync();
+}
+
+private IQueryable<Movie> ApplyFilter(IQueryable<Movie> query, MovieFilter filter)
+{
+    if (!string.IsNullOrEmpty(filter.Title))
+    {
+        query = query.Where(m => m.Title == filter.Title);
+    }
+    
+    if (!string.IsNullOrEmpty(filter.TitlePart))
+    {
+        query = query.Where(m => m.Title.Contains(filter.TitlePart));
+    }
+    
+    if (filter.MinReleaseYear.HasValue)
+    {
+        query = query.Where(m => m.ReleaseYear >= filter.MinReleaseYear.Value);
+    }
+    
+    if (filter.ShowDate.HasValue)
+    {
+        var date = filter.ShowDate.Value;
+        query = query.Where(m => m.StartDate <= date && m.EndDate >= date);
+    }
+    
+    return query;
+}
+```
+
+3.5 Проекция данных
+
+DTOs/MovieDto.cs:
+
+```csharp
+namespace CinemaDbLibrary.DTOs
+{
+    public class MovieDto
+    {
+        public int MovieId { get; set; }
+        public string Title { get; set; } = string.Empty;
+        public int Duration { get; set; }
+    }
+}
+```
+
+DTOs/VisitorDto.cs:
+
+```csharp
+namespace CinemaDbLibrary.DTOs
+{
+    public class VisitorDto
+    {
+        public string Phone { get; set; } = string.Empty;
+        public int TicketsCount { get; set; }
+    }
+}
+```
+
+DTOs/MovieGenresDto.cs:
+
+```csharp
+namespace CinemaDbLibrary.DTOs
+{
+    public class MovieGenresDto
+    {
+        public int MovieId { get; set; }
+        public string Title { get; set; } = string.Empty;
+        public List<string> Genres { get; set; } = new List<string>();
+    }
+}
+```
+
+Обновленный MovieService.cs:
+
+```csharp
+public async Task<List<MovieDto>> GetMoviesDtoAsync()
+{
+    return await _context.Movies
+        .Select(m => new MovieDto
+        {
+            MovieId = m.MovieId,
+            Title = m.Title,
+            Duration = m.Duration
+        })
+        .ToListAsync();
+}
+
+public async Task<List<MovieGenresDto>> GetMoviesGenresDtoAsync()
+{
+    return await _context.Movies
+        .Include(m => m.Genres)
+        .Select(m => new MovieGenresDto
+        {
+            MovieId = m.MovieId,
+            Title = m.Title,
+            Genres = m.Genres.Select(g => g.Name).ToList()
+        })
+        .ToListAsync();
+}
+```
+
+Обновленный VisitorService.cs:
+
+```csharp
+public async Task<List<VisitorDto>> GetVisitorsDtoAsync()
+{
+    return await _context.Visitors
+        .Select(v => new VisitorDto
+        {
+            Phone = v.Phone,
+            TicketsCount = v.Tickets.Count
+        })
+        .ToListAsync();
+}
+```
+
+Ответы на контрольные вопросы
+
+6.1 Методы сортировки
+
+· OrderBy - сортировка по возрастанию
+· OrderByDescending - сортировка по убыванию
+· ThenBy - дополнительная сортировка по возрастанию после основной
+· ThenByDescending - дополнительная сортировка по убыванию после основной
+
+6.2 Методы Take и Skip
+
+Используются для пагинации:
+
+· Skip - пропускает указанное количество элементов
+· Take - берет указанное количество элементов
+
+6.3 Метод Where
+
+Используется для фильтрации данных по условию.
+
+6.4 Логические операторы
+
+· && (И), || (ИЛИ), ! (НЕ)
+
+6.5 Проверка значения в списке
+
+```csharp
+list.Contains(value)
+```
+
+6.6 Проверка начала строки
+
+```csharp
+str.StartsWith("text")
+```
+
+6.7 Проверка содержания текста
+
+```csharp
+str.Contains("text")
+```
+
+6.8 Select для выбора данных
+
+```csharp
+.Select(x => new { x.Property1, x.Property2 })
+```
+
+Это полное решение лабораторной работы, включающее все требуемые функциональности: работу с БД, пагинацию, сортировку, фильтрацию и проекцию данных.
