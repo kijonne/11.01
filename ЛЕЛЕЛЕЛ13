@@ -1,0 +1,184 @@
+Тесты для пункта 5.4: Разработка тестов в Postman
+
+1. Тесты для GET /api/Objects
+
+```javascript
+// Проверка статуса ответа
+pm.test("Status code is 200", function () {
+    pm.response.to.have.status(200);
+});
+
+// Проверка времени ответа
+pm.test("Response time is acceptable", function () {
+    pm.expect(pm.response.responseTime).to.be.below(1000);
+});
+
+// Проверка формата JSON
+pm.test("Response is JSON", function () {
+    pm.response.to.be.json;
+});
+
+// Проверка структуры данных
+pm.test("Response has array of objects", function () {
+    const responseData = pm.response.json();
+    pm.expect(responseData).to.be.an('array');
+});
+
+// Проверка заголовков
+pm.test("Content-Type is application/json", function () {
+    pm.expect(pm.response.headers.get('Content-Type')).to.include('application/json');
+});
+```
+
+2. Тесты для POST /token
+
+```javascript
+// Проверка успешной авторизации
+pm.test("Status code is 200", function () {
+    pm.response.to.have.status(200);
+});
+
+// Проверка наличия токена
+pm.test("Response contains token", function () {
+    const responseData = pm.response.json();
+    pm.expect(responseData).to.have.property('token');
+    pm.expect(responseData.token).to.not.be.empty;
+});
+
+// Сохранение токена в переменную
+pm.test("Save token to environment", function () {
+    const responseData = pm.response.json();
+    pm.environment.set("auth_token", responseData.token);
+});
+
+// Проверка структуры ответа
+pm.test("Response has correct structure", function () {
+    const responseData = pm.response.json();
+    pm.expect(responseData).to.have.all.keys('token', 'expires');
+});
+```
+
+3. Тесты для POST /api/Objects (создание объекта)
+
+```javascript
+// Проверка успешного создания
+pm.test("Status code is 201 Created", function () {
+    pm.response.to.have.status(201);
+});
+
+// Проверка структуры созданного объекта
+pm.test("Created object has correct structure", function () {
+    const responseData = pm.response.json();
+    pm.expect(responseData).to.have.property('id');
+    pm.expect(responseData).to.have.property('name');
+});
+
+// Проверка заголовков
+pm.test("Content-Type is application/json", function () {
+    pm.expect(pm.response.headers.get('Content-Type')).to.include('application/json');
+});
+
+// Проверка что объект действительно создан
+pm.test("Object has valid ID", function () {
+    const responseData = pm.response.json();
+    pm.expect(responseData.id).to.be.a('number');
+    pm.expect(responseData.id).to.be.above(0);
+});
+```
+
+4. Тесты для GET /api/Objects/{id}
+
+```javascript
+// Проверка статуса ответа
+pm.test("Status code is 200", function () {
+    pm.response.to.have.status(200);
+});
+
+// Проверка что вернулся один объект
+pm.test("Response is single object", function () {
+    const responseData = pm.response.json();
+    pm.expect(responseData).to.be.an('object');
+    pm.expect(responseData).to.not.be.an('array');
+});
+
+// Проверка наличия обязательных полей
+pm.test("Object has required fields", function () {
+    const responseData = pm.response.json();
+    pm.expect(responseData).to.have.property('id');
+    pm.expect(responseData).to.have.property('name');
+});
+```
+
+5. Тесты для PUT /api/Objects/{id}
+
+```javascript
+// Проверка успешного обновления
+pm.test("Status code is 200", function () {
+    pm.response.to.have.status(200);
+});
+
+// Проверка что объект обновлен
+pm.test("Object updated successfully", function () {
+    const responseData = pm.response.json();
+    const requestData = JSON.parse(pm.request.body.raw);
+    pm.expect(responseData.name).to.eql(requestData.name);
+});
+```
+
+6. Тесты для DELETE /api/Objects/{id}
+
+```javascript
+// Проверка успешного удаления
+pm.test("Status code is 200", function () {
+    pm.response.to.have.status(200);
+});
+
+// Проверка сообщения об удалении
+pm.test("Delete confirmation", function () {
+    const responseData = pm.response.json();
+    pm.expect(responseData).to.have.property('message');
+    pm.expect(responseData.message).to.include('deleted');
+});
+```
+
+7. Универсальные тесты для всех запросов
+
+```javascript
+// Базовые проверки для всех запросов
+pm.test("Response time is under 2s", function () {
+    pm.expect(pm.response.responseTime).to.be.below(2000);
+});
+
+pm.test("Response has valid JSON", function () {
+    try {
+        JSON.parse(pm.response.text());
+        pm.test("JSON is valid", function () {});
+    } catch (e) {
+        pm.test("JSON is valid", function () {
+            throw new Error("Invalid JSON response");
+        });
+    }
+});
+```
+
+8. Тесты для проверки авторизации
+
+```javascript
+// Для защищенных эндпоинтов
+pm.test("Not unauthorized", function () {
+    pm.expect(pm.response.code).to.not.eql(401);
+});
+
+pm.test("Not forbidden", function () {
+    pm.expect(pm.response.code).to.not.eql(403);
+});
+```
+
+Как использовать:
+
+1. Откройте каждый запрос в Postman
+2. Перейдите во вкладку Tests
+3. Скопируйте соответствующий код тестов
+4. Отправьте запрос - результаты тестов появятся в разделе Test Results
+
+Все тесты показывают ✅ при успешном выполнении и ❌ при ошибках.
